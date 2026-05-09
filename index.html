@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>図書館ファインダー</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0f1117;
+      --surface:  #1a1d27;
+      --surface2: #22263a;
+      --border:   #2e3352;
+      --accent:   #6c63ff;
+      --accent2:  #a78bfa;
+      --danger:   #f87171;
+      --warn:     #fbbf24;
+      --success:  #34d399;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --radius:   10px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    .wrapper { max-width: 720px; margin: 0 auto; }
+
+    header { margin-bottom: 28px; }
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.02em; }
+    header h1 span { color: var(--accent2); }
+    header p { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 0.82rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 12px;
+    }
+
+    /* Tab switcher */
+    .tab-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tab-btn:not(.active):hover { border-color: var(--accent2); color: var(--text); }
+
+    /* Form elements */
+    .form-row { display: flex; gap: 8px; align-items: flex-end; }
+    input[type="text"], select {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 9px 12px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color .2s;
+    }
+    input[type="text"]:focus, select:focus { border-color: var(--accent); }
+    select option { background: var(--surface2); }
+    input[type="text"]::placeholder { color: var(--muted); }
+
+    .btn {
+      padding: 9px 18px;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s;
+      white-space: nowrap;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover:not(:disabled) { opacity: 0.88; }
+    .btn-secondary {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover:not(:disabled) { border-color: var(--accent2); }
+
+    /* GPS section */
+    #tab-gps { text-align: center; padding: 8px 0; }
+    #geo-status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* Manual section */
+    #tab-manual .form-row { flex-wrap: wrap; }
+    #pref-select { flex: 0 0 auto; min-width: 130px; }
+    #city-input { flex: 1; min-width: 120px; }
+
+    /* Controls bar */
+    #controls-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    #controls-section h2 { display: none; }
+
+    .filters {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      flex: 1;
+    }
+    .filter-btn {
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all .15s;
+    }
+    .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .filter-btn:not(.active):hover { border-color: var(--accent2); color: var(--text); }
+
+    #limit-select { width: auto; }
+
+    /* ISBN section */
+    #isbn-input { flex: 1; min-width: 160px; }
+    #isbn-status { font-size: 0.82rem; color: var(--muted); margin-top: 8px; }
+    #isbn-status.error { color: var(--danger); }
+    #isbn-status.searching { color: var(--accent2); }
+
+    /* Loading */
+    .loading-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 40px;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Error box */
+    .error-box {
+      background: #2d1a1a;
+      border: 1px solid var(--danger);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      color: var(--danger);
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
+    .error-box p + p { margin-top: 8px; }
+    .error-box .error-hint { color: var(--muted); font-size: 0.82rem; }
+
+    /* Results section */
+    .section-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    /* Library cards */
+    .library-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .library-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      animation: slideIn .2s ease;
+      transition: border-color .2s;
+    }
+    .library-card:hover { border-color: var(--accent2); }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .lib-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .cat-badge {
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 10px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .cat-LARGE, .cat-MEDIUM { background: #1a2a4a; color: #60a5fa; }
+    .cat-SMALL { background: var(--surface2); color: var(--muted); }
+    .cat-UNIV  { background: #2a1a4a; color: var(--accent2); }
+    .cat-SPECIAL { background: #0f2a1a; color: var(--success); }
+    .cat-BM    { background: var(--surface2); color: var(--muted); }
+
+    .lib-name {
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+      flex: 1;
+      word-break: break-word;
+    }
+    .lib-name:hover { color: var(--accent2); text-decoration: underline; }
+
+    .lib-distance {
+      font-size: 0.8rem;
+      color: var(--accent2);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .lib-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .lib-address, .lib-tel {
+      font-size: 0.8rem;
+      color: var(--muted);
+      text-decoration: none;
+    }
+    .lib-tel:hover { color: var(--accent2); }
+    .lib-website {
+      font-size: 0.78rem;
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .lib-website:hover { text-decoration: underline; }
+
+    /* Availability badges */
+    .lib-availability {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .avail-badge {
+      font-size: 0.75rem;
+      padding: 3px 10px;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+    .avail-ok       { background: #0f2d1f; color: var(--success); }
+    .avail-stock    { background: #1a2a1a; color: #86efac; }
+    .avail-out      { background: #3d1a1a; color: var(--danger); }
+    .avail-inlib    { background: #2a1f0a; color: var(--warn); }
+    .avail-other    { background: var(--surface2); color: var(--muted); }
+    .avail-loading  { background: var(--surface2); color: var(--muted); animation: pulse 1.2s ease-in-out infinite; }
+    .avail-none     { background: var(--surface2); color: var(--muted); }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .avail-libkeys {
+      font-size: 0.75rem;
+      color: var(--muted);
+      flex: 1;
+      word-break: break-word;
+    }
+    .reserve-link {
+      font-size: 0.75rem;
+      color: var(--accent);
+      text-decoration: none;
+      margin-left: auto;
+    }
+    .reserve-link:hover { text-decoration: underline; }
+
+    /* Toast */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 1000;
+    }
+    .toast {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-size: 0.85rem;
+      animation: slideIn .2s ease;
+      max-width: 300px;
+    }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error   { border-color: var(--danger);  color: var(--danger); }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 48px 20px;
+      color: var(--muted);
+    }
+    .empty-state .icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.9rem; }
+
+    /* Attribution */
+    .attribution {
+      margin-top: 40px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .attribution a { color: var(--accent); text-decoration: none; }
+    .attribution a:hover { text-decoration: underline; }
+
+    @media (max-width: 480px) {
+      body { padding: 20px 12px; }
+      .form-row { flex-direction: column; }
+      #tab-manual .form-row { flex-direction: column; }
+      #pref-select, #city-input { width: 100%; }
+      #controls-section { flex-direction: column; align-items: flex-start; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <h1>図書館<span>ファインダー</span></h1>
+    <p>近くの図書館をカーリル図書館APIで検索</p>
+  </header>
+
+  <!-- 場所設定 -->
+  <div class="card" id="location-section">
+    <h2>場所を設定</h2>
+    <div class="tab-row">
+      <button class="tab-btn active" data-tab="gps">📍 現在地を使用</button>
+      <button class="tab-btn" data-tab="manual">✏️ 手動入力</button>
+    </div>
+
+    <div id="tab-gps">
+      <button class="btn btn-primary" id="geo-btn">現在地を取得する</button>
+      <p id="geo-status"></p>
+    </div>
+
+    <div id="tab-manual" hidden>
+      <div class="form-row">
+        <select id="pref-select">
+          <option value="">都道府県を選択</option>
+        </select>
+        <input type="text" id="city-input" placeholder="市区町村（任意）">
+        <button class="btn btn-primary" id="manual-search-btn">検索</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- コントロールバー -->
+  <div class="card" id="controls-section" hidden>
+    <div class="filters">
+      <button class="filter-btn active" data-cat="all">すべて</button>
+      <button class="filter-btn" data-cat="public">公共図書館</button>
+      <button class="filter-btn" data-cat="UNIV">大学図書館</button>
+      <button class="filter-btn" data-cat="SPECIAL">専門図書館</button>
+    </div>
+    <select id="limit-select">
+      <option value="10">10件</option>
+      <option value="20" selected>20件</option>
+      <option value="50">50件</option>
+    </select>
+  </div>
+
+  <!-- ISBN蔵書検索 -->
+  <div class="card" id="book-section" hidden>
+    <h2>蔵書検索（ISBN）</h2>
+    <div class="form-row">
+      <input type="text" id="isbn-input" placeholder="ISBN-10 または ISBN-13">
+      <button class="btn btn-secondary" id="isbn-clear-btn" hidden>クリア</button>
+      <button class="btn btn-primary" id="isbn-search-btn">検索</button>
+    </div>
+    <p id="isbn-status"></p>
+  </div>
+
+  <!-- ローディング -->
+  <div id="loading" class="loading-state" hidden>
+    <div class="spinner"></div>
+    <p id="loading-msg">読み込み中...</p>
+  </div>
+
+  <!-- エラー -->
+  <div id="error-box" class="error-box" hidden></div>
+
+  <!-- 結果 -->
+  <div id="results-header" hidden>
+    <p class="section-label" id="results-count"></p>
+  </div>
+  <div id="library-list" class="library-list"></div>
+
+  <div class="attribution" id="attribution" hidden>
+    図書館情報は <a href="https://calil.jp/" target="_blank" rel="noopener">カーリル</a> の図書館APIを使用しています。
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+  const API_KEY = '0195be81521f66aa79f5f7d0e32f8510';
+  const PREFS = [
+    '北海道','青森県','岩手県','宮城県','秋田県','山形県','福島県',
+    '茨城県','栃木県','群馬県','埼玉県','千葉県','東京都','神奈川県',
+    '新潟県','富山県','石川県','福井県','山梨県','長野県','岐阜県',
+    '静岡県','愛知県','三重県','滋賀県','京都府','大阪府','兵庫県',
+    '奈良県','和歌山県','鳥取県','島根県','岡山県','広島県','山口県',
+    '徳島県','香川県','愛媛県','高知県','福岡県','佐賀県','長崎県',
+    '熊本県','大分県','宮崎県','鹿児島県','沖縄県',
+  ];
+
+  const CAT_LABELS = {
+    LARGE: '図書館（広域）', MEDIUM: '図書館（地域）',
+    SMALL: '図書室・公民館', UNIV: '大学図書館',
+    SPECIAL: '専門図書館', BM: '移動図書館',
+  };
+
+  const AVAIL_PRIORITY = ['貸出可','蔵書あり','館内のみ','貸出中','予約中','準備中','休館中','蔵書なし'];
+
+  const state = {
+    mode: 'gps',
+    geocode: null,
+    pref: null,
+    city: null,
+    limit: 20,
+    categoryFilter: 'all',
+    libraries: [],
+    filteredLibs: [],
+    isbn: null,
+    isbn10: null,
+    availability: {},
+    pollTimer: null,
+    pollSession: null,
+    pollCount: 0,
+  };
+
+  // ---- JSONP utility ----
+
+  let _cbCounter = 0;
+
+  function jsonpRequest({ url, params, onSuccess, onError, abortRef }) {
+    const cbName = `_calilCb${++_cbCounter}_${Date.now()}`;
+    const p = new URLSearchParams({ ...params, callback: cbName });
+    const script = document.createElement('script');
+    script.src = `${url}?${p}`;
+    let done = false;
+
+    window[cbName] = data => {
+      if (done) return;
+      done = true;
+      delete window[cbName];
+      script.remove();
+      onSuccess(data);
+    };
+
+    script.onerror = () => {
+      if (done) return;
+      done = true;
+      delete window[cbName];
+      script.remove();
+      onError(new Error('APIリクエストに失敗しました。ネットワーク接続を確認してください。'));
+    };
+
+    if (abortRef) {
+      abortRef.cancel = () => {
+        if (done) return;
+        done = true;
+        delete window[cbName];
+        script.remove();
+      };
+    }
+
+    document.head.appendChild(script);
+  }
+
+  let currentLibRequest = {};
+
+  // ---- Init ----
+
+  function init() {
+    populatePrefSelect();
+    wireEvents();
+  }
+
+  function populatePrefSelect() {
+    const sel = document.getElementById('pref-select');
+    PREFS.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p;
+      opt.textContent = p;
+      sel.appendChild(opt);
+    });
+  }
+
+  function wireEvents() {
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.mode = btn.dataset.tab;
+        document.getElementById('tab-gps').hidden    = (state.mode !== 'gps');
+        document.getElementById('tab-manual').hidden = (state.mode !== 'manual');
+      });
+    });
+
+    // GPS
+    document.getElementById('geo-btn').addEventListener('click', onGeoBtn);
+
+    // Manual search
+    document.getElementById('manual-search-btn').addEventListener('click', onManualSearch);
+    document.getElementById('city-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') onManualSearch();
+    });
+
+    // Category filters
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.categoryFilter = btn.dataset.cat;
+        applyFilter();
+        renderLibraries();
+      });
+    });
+
+    // Limit selector
+    document.getElementById('limit-select').addEventListener('change', e => {
+      state.limit = parseInt(e.target.value);
+      fetchLibraries();
+    });
+
+    // ISBN search
+    document.getElementById('isbn-search-btn').addEventListener('click', onIsbnSearch);
+    document.getElementById('isbn-input').addEventListener('keydown', e => {
+      if (e.key === 'Enter') onIsbnSearch();
+    });
+    document.getElementById('isbn-clear-btn').addEventListener('click', clearIsbn);
+  }
+
+  // ---- Geolocation ----
+
+  function onGeoBtn() {
+    if (!navigator.geolocation) {
+      showError('このブラウザは位置情報に対応していません。手動入力をお試しください。');
+      return;
+    }
+    const btn = document.getElementById('geo-btn');
+    btn.disabled = true;
+    document.getElementById('geo-status').textContent = '位置情報を取得中...';
+    clearError();
+
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        btn.disabled = false;
+        document.getElementById('geo-status').textContent =
+          `緯度: ${pos.coords.latitude.toFixed(4)}, 経度: ${pos.coords.longitude.toFixed(4)}`;
+        // CALIL geocode format: longitude,latitude
+        state.geocode = `${pos.coords.longitude},${pos.coords.latitude}`;
+        state.pref = null;
+        state.city = null;
+        fetchLibraries();
+      },
+      err => {
+        btn.disabled = false;
+        const msgs = {
+          1: '位置情報の利用が拒否されました。手動入力に切り替えてください。',
+          2: '位置情報を取得できませんでした。手動入力をお試しください。',
+          3: '位置情報の取得がタイムアウトしました。再試行してください。',
+        };
+        document.getElementById('geo-status').textContent = '';
+        showError(msgs[err.code] || '位置情報の取得に失敗しました。');
+        // Auto-switch to manual tab
+        document.querySelectorAll('.tab-btn').forEach(b => {
+          b.classList.toggle('active', b.dataset.tab === 'manual');
+        });
+        document.getElementById('tab-gps').hidden = true;
+        document.getElementById('tab-manual').hidden = false;
+        state.mode = 'manual';
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+  }
+
+  // ---- Manual search ----
+
+  function onManualSearch() {
+    const pref = document.getElementById('pref-select').value;
+    if (!pref) {
+      showToast('都道府県を選択してください', 'error');
+      document.getElementById('pref-select').focus();
+      return;
+    }
+    state.pref = pref;
+    state.city = document.getElementById('city-input').value.trim() || null;
+    state.geocode = null;
+    fetchLibraries();
+  }
+
+  // ---- Fetch libraries ----
+
+  function fetchLibraries() {
+    if (currentLibRequest.cancel) currentLibRequest.cancel();
+    currentLibRequest = {};
+
+    cancelPoll();
+    state.availability = {};
+    state.isbn = null;
+    state.isbn10 = null;
+    clearIsbnUI();
+
+    setLoading(true, '図書館を検索中...');
+    clearError();
+
+    const params = {
+      appkey: API_KEY,
+      format: 'json',
+      limit: state.limit,
+    };
+    if (state.geocode) params.geocode = state.geocode;
+    if (state.pref)    params.pref    = state.pref;
+    if (state.city)    params.city    = state.city;
+
+    jsonpRequest({
+      url: 'https://api.calil.jp/library',
+      params,
+      abortRef: currentLibRequest,
+      onSuccess: data => {
+        setLoading(false);
+        onLibrariesLoaded(Array.isArray(data) ? data : []);
+      },
+      onError: err => {
+        setLoading(false);
+        showError(`APIエラー: ${err.message}`);
+      },
+    });
+  }
+
+  function onLibrariesLoaded(data) {
+    state.libraries = data;
+    applyFilter();
+    renderLibraries();
+    document.getElementById('controls-section').hidden = false;
+    document.getElementById('book-section').hidden = (state.filteredLibs.length === 0);
+    document.getElementById('results-header').hidden = false;
+    document.getElementById('attribution').hidden = false;
+  }
+
+  // ---- Filter & render ----
+
+  function applyFilter() {
+    const cat = state.categoryFilter;
+    if (cat === 'all') {
+      state.filteredLibs = [...state.libraries];
+    } else if (cat === 'public') {
+      state.filteredLibs = state.libraries.filter(l =>
+        ['LARGE', 'MEDIUM', 'SMALL'].includes(l.category)
+      );
+    } else {
+      state.filteredLibs = state.libraries.filter(l => l.category === cat);
+    }
+  }
+
+  function renderLibraries() {
+    const list = document.getElementById('library-list');
+    const countEl = document.getElementById('results-count');
+
+    if (state.filteredLibs.length === 0) {
+      countEl.textContent = '結果なし';
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="icon">📚</div>
+          <p>条件に合う図書館が見つかりませんでした。<br>フィルターや件数を変更してお試しください。</p>
+        </div>`;
+      return;
+    }
+
+    countEl.textContent = `${state.filteredLibs.length}件の図書館`;
+
+    list.innerHTML = state.filteredLibs.map(lib => {
+      const catLabel = CAT_LABELS[lib.category] || lib.category;
+      const calilUrl = buildCalilLibUrl(lib.libid, lib.formal);
+      const distHtml = lib.distance != null
+        ? `<span class="lib-distance">${parseFloat(lib.distance).toFixed(1)} km</span>` : '';
+      const telHtml = lib.tel
+        ? `<a class="lib-tel" href="tel:${escHtml(lib.tel)}">📞 ${escHtml(lib.tel)}</a>` : '';
+      const webHtml = lib.url_pc
+        ? `<a class="lib-website" href="${escHtml(lib.url_pc)}" target="_blank" rel="noopener">🌐 公式サイト</a>` : '';
+
+      return `
+        <div class="library-card" data-libid="${escHtml(lib.libid)}" data-systemid="${escHtml(lib.systemid)}">
+          <div class="lib-header">
+            <span class="cat-badge cat-${escHtml(lib.category)}">${escHtml(catLabel)}</span>
+            <a class="lib-name" href="${calilUrl}" target="_blank" rel="noopener">${escHtml(lib.formal)}</a>
+            ${distHtml}
+          </div>
+          <div class="lib-meta">
+            ${lib.address ? `<span class="lib-address">📍 ${escHtml(lib.address)}</span>` : ''}
+            ${telHtml}
+            ${webHtml}
+          </div>
+          <div class="lib-availability" hidden></div>
+        </div>`;
+    }).join('');
+
+    // Re-apply availability if already searched
+    if (state.isbn) updateAvailabilityUI();
+  }
+
+  // ---- ISBN / book availability ----
+
+  function onIsbnSearch() {
+    const raw = document.getElementById('isbn-input').value.trim();
+    const cleaned = raw.replace(/[-\s]/g, '');
+
+    if (!/^\d{10}$|^\d{13}$/.test(cleaned)) {
+      setIsbnStatus('ISBNは10桁または13桁の数字を入力してください', 'error');
+      return;
+    }
+
+    const isbn13 = cleaned.length === 10 ? isbn10to13(cleaned) : cleaned;
+    const isbn10 = cleaned.length === 13 ? isbn13to10(cleaned) : cleaned;
+
+    if (!isbn13) {
+      setIsbnStatus('ISBNの形式が正しくありません', 'error');
+      return;
+    }
+
+    state.isbn   = isbn13;
+    state.isbn10 = isbn10;
+    state.availability = {};
+    cancelPoll();
+
+    document.getElementById('isbn-clear-btn').hidden = false;
+    setIsbnStatus('蔵書情報を取得中...', 'searching');
+
+    // Mark all visible libraries as loading
+    document.querySelectorAll('.lib-availability').forEach(el => {
+      el.hidden = false;
+      el.innerHTML = `<span class="avail-badge avail-loading">検索中...</span>`;
+    });
+
+    startAvailCheck();
+  }
+
+  function clearIsbn() {
+    cancelPoll();
+    state.isbn = null;
+    state.isbn10 = null;
+    state.availability = {};
+    document.getElementById('isbn-input').value = '';
+    document.getElementById('isbn-clear-btn').hidden = true;
+    clearIsbnUI();
+  }
+
+  function clearIsbnUI() {
+    setIsbnStatus('', '');
+    document.querySelectorAll('.lib-availability').forEach(el => {
+      el.hidden = true;
+      el.innerHTML = '';
+    });
+  }
+
+  function startAvailCheck() {
+    const systemIds = [...new Set(state.filteredLibs.map(l => l.systemid))];
+    if (systemIds.length === 0) {
+      setIsbnStatus('検索対象の図書館がありません', 'error');
+      return;
+    }
+
+    state.pollCount = 0;
+    fetchCheckApi({
+      appkey: API_KEY,
+      isbn: state.isbn,
+      systemid: systemIds.slice(0, 100).join(','),
+      format: 'json',
+    });
+  }
+
+  function fetchCheckApi(params) {
+    jsonpRequest({
+      url: 'https://api.calil.jp/check',
+      params,
+      onSuccess: data => handleCheckResponse(data),
+      onError: err => setIsbnStatus(`蔵書検索エラー: ${err.message}`, 'error'),
+    });
+  }
+
+  function handleCheckResponse(data) {
+    // Merge books data into state.availability
+    if (data.books) {
+      for (const isbn of Object.keys(data.books)) {
+        for (const systemid of Object.keys(data.books[isbn])) {
+          if (!state.availability[systemid]) {
+            state.availability[systemid] = data.books[isbn][systemid];
+          } else {
+            // Merge libkey
+            const existing = state.availability[systemid];
+            const incoming = data.books[isbn][systemid];
+            if (incoming.libkey) {
+              existing.libkey = Object.assign({}, existing.libkey, incoming.libkey);
+            }
+            if (incoming.status !== 'Running') existing.status = incoming.status;
+            if (incoming.reserveurl) existing.reserveurl = incoming.reserveurl;
+          }
+        }
+      }
+    }
+
+    updateAvailabilityUI();
+
+    if (data.continue === 1 && state.pollCount < 20) {
+      state.pollCount++;
+      state.pollSession = data.session;
+      state.pollTimer = setTimeout(() => {
+        fetchCheckApi({
+          appkey: API_KEY,
+          session: data.session,
+          format: 'json',
+        });
+      }, 2000);
+    } else {
+      setIsbnStatus(
+        `蔵書検索完了 — ` +
+        `<a href="${buildCalilBookUrl(state.isbn10 || state.isbn)}" target="_blank" rel="noopener" style="color:var(--accent)">カーリルで詳細を見る</a>`,
+        'done'
+      );
+    }
+  }
+
+  function updateAvailabilityUI() {
+    document.querySelectorAll('.library-card').forEach(card => {
+      const systemid = card.dataset.systemid;
+      const avEl = card.querySelector('.lib-availability');
+      if (!avEl) return;
+
+      const data = state.availability[systemid];
+      avEl.hidden = false;
+
+      if (!data) {
+        avEl.innerHTML = `<span class="avail-badge avail-loading">検索中...</span>`;
+        return;
+      }
+
+      if (data.status === 'Running') {
+        avEl.innerHTML = `<span class="avail-badge avail-loading">取得中...</span>`;
+        return;
+      }
+
+      if (data.status === 'Error') {
+        avEl.innerHTML = `<span class="avail-badge avail-other">取得失敗</span>`;
+        return;
+      }
+
+      const libkey = data.libkey || {};
+      const keys = Object.keys(libkey);
+
+      if (keys.length === 0) {
+        avEl.innerHTML = `<span class="avail-badge avail-none">蔵書なし</span>`;
+        return;
+      }
+
+      // Pick best status
+      const bestStatus = pickBestStatus(Object.values(libkey));
+      const badgeClass = statusToBadgeClass(bestStatus);
+
+      // Show libkey details (at most 3)
+      const details = keys.slice(0, 3).map(k => `${k}: ${libkey[k]}`).join(' / ');
+      const moreText = keys.length > 3 ? ` 他${keys.length - 3}館` : '';
+
+      const reserveHtml = data.reserveurl
+        ? `<a class="reserve-link" href="${escHtml(data.reserveurl)}" target="_blank" rel="noopener">予約する →</a>`
+        : '';
+
+      avEl.innerHTML = `
+        <span class="avail-badge ${badgeClass}">${escHtml(bestStatus)}</span>
+        <span class="avail-libkeys">${escHtml(details)}${escHtml(moreText)}</span>
+        ${reserveHtml}
+      `;
+    });
+  }
+
+  function pickBestStatus(statuses) {
+    for (const s of AVAIL_PRIORITY) {
+      if (statuses.includes(s)) return s;
+    }
+    return statuses[0] || '不明';
+  }
+
+  function statusToBadgeClass(s) {
+    if (s === '貸出可') return 'avail-ok';
+    if (s === '蔵書あり') return 'avail-stock';
+    if (s === '館内のみ') return 'avail-inlib';
+    if (['貸出中','予約中','準備中','休館中'].includes(s)) return 'avail-out';
+    if (s === '蔵書なし') return 'avail-none';
+    return 'avail-other';
+  }
+
+  function cancelPoll() {
+    if (state.pollTimer) {
+      clearTimeout(state.pollTimer);
+      state.pollTimer = null;
+    }
+    state.pollSession = null;
+    state.pollCount = 0;
+  }
+
+  // ---- ISBN conversion ----
+
+  function isbn10to13(isbn10) {
+    if (isbn10.length !== 10) return null;
+    const base = '978' + isbn10.slice(0, 9);
+    let sum = 0;
+    for (let i = 0; i < 12; i++) sum += parseInt(base[i]) * (i % 2 === 0 ? 1 : 3);
+    const check = (10 - (sum % 10)) % 10;
+    return base + check;
+  }
+
+  function isbn13to10(isbn13) {
+    if (!isbn13.startsWith('978') || isbn13.length !== 13) return isbn13;
+    const base = isbn13.slice(3, 12);
+    let sum = 0;
+    for (let i = 0; i < 9; i++) sum += parseInt(base[i]) * (10 - i);
+    const check = (11 - (sum % 11)) % 11;
+    const checkChar = check === 10 ? 'X' : String(check);
+    return base + checkChar;
+  }
+
+  // ---- URL builders ----
+
+  function buildCalilLibUrl(libid, formal) {
+    return `https://calil.jp/library/${encodeURIComponent(libid)}/${encodeURIComponent(formal)}`;
+  }
+
+  function buildCalilBookUrl(isbn) {
+    return `https://calil.jp/book/${encodeURIComponent(isbn)}`;
+  }
+
+  // ---- UI helpers ----
+
+  function setLoading(bool, msg = '') {
+    document.getElementById('loading').hidden = !bool;
+    document.getElementById('loading-msg').textContent = msg;
+  }
+
+  function showError(msg) {
+    const box = document.getElementById('error-box');
+    box.hidden = false;
+    box.textContent = msg;
+  }
+
+  function clearError() {
+    const box = document.getElementById('error-box');
+    box.hidden = true;
+    box.textContent = '';
+  }
+
+  function setIsbnStatus(html, type) {
+    const el = document.getElementById('isbn-status');
+    el.innerHTML = html;
+    el.className = type ? type : '';
+  }
+
+  let toastTimer = null;
+  function showToast(msg, type = 'info') {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.textContent = msg;
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  function escHtml(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // ---- Start ----
+  init();
+</script>
+</body>
+</html>
